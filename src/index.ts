@@ -12,7 +12,7 @@ import { performEnhancedSearch } from './search.js';
 import { performExtract } from './tools/extract.js';
 import { performResearch } from './tools/research.js';
 import { destroySessionManager } from './core/session-manager.js';
-import { destroyCaches } from './cache.js';
+import { destroyCaches } from './core/cache.js';
 
 /**
  * Tool annotations as per MCP spec v2025-11-25
