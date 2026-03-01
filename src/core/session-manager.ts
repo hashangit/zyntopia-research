@@ -252,6 +252,38 @@ export class BrowserSessionManager {
   }
 
   /**
+   * Get session statistics for resource monitoring
+   */
+  getStats(): {
+    activeCount: number;
+    maxSessions: number;
+    sessions: Array<{
+      id: string;
+      createdAt: Date;
+      lastUsedAt: Date;
+      device?: string;
+      isActive: boolean;
+    }>;
+  } {
+    const now = Date.now();
+    const sessions = Array.from(this.sessions.values())
+      .filter(session => now - session.lastUsedAt.getTime() <= this.sessionTimeout)
+      .map(session => ({
+        id: session.id,
+        createdAt: session.createdAt,
+        lastUsedAt: session.lastUsedAt,
+        device: session.device,
+        isActive: session.isActive,
+      }));
+
+    return {
+      activeCount: sessions.filter(s => s.isActive).length,
+      maxSessions: this.maxSessions,
+      sessions,
+    };
+  }
+
+  /**
    * Cleanup all sessions and stop cleanup interval
    */
   async destroy(): Promise<void> {
