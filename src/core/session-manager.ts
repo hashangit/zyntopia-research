@@ -1,4 +1,4 @@
-import { runAgentBrowser } from './browser.js';
+import { runAgentBrowser, DEVICE_PROFILES, type DeviceType } from './browser.js';
 
 export interface BrowserSession {
   id: string;
@@ -10,17 +10,9 @@ export interface BrowserSession {
 }
 
 export interface SessionConfig {
-  device?: 'desktop' | 'mobile' | 'iphone' | 'android';
+  device?: DeviceType;
   proxy?: string;
 }
-
-// Device emulation profiles mapping to agent-browser device names
-const DEVICE_PROFILES: Record<string, string> = {
-  desktop: '', // Default, no special device
-  mobile: 'Pixel 5',
-  iphone: 'iPhone 13',
-  android: 'Pixel 5',
-};
 
 export class BrowserSessionManager {
   private sessions: Map<string, BrowserSession> = new Map();
@@ -138,6 +130,24 @@ export class BrowserSessionManager {
   }
 
   /**
+   * Get an existing session by ID or create a new one
+   * Consolidates the common pattern across tools
+   */
+  async getOrCreateSession(
+    sessionId?: string,
+    config: SessionConfig = {}
+  ): Promise<{ sessionId: string; session: BrowserSession }> {
+    if (sessionId) {
+      const existing = await this.getSession(sessionId);
+      if (existing) {
+        return { sessionId, session: existing };
+      }
+      // Session expired or not found, create new
+    }
+    return this.reuseOrCreate(config);
+  }
+
+  /**
    * Close and cleanup a session
    */
   async closeSession(id: string): Promise<void> {
@@ -160,6 +170,8 @@ export class BrowserSessionManager {
    * Cleanup sessions that have been idle too long
    */
   async cleanupExpiredSessions(): Promise<void> {
+    if (this.sessions.size === 0) return; // Early exit if no sessions
+
     const now = Date.now();
     const expiredIds: string[] = [];
 
@@ -173,44 +185,6 @@ export class BrowserSessionManager {
     for (const id of expiredIds) {
       await this.closeSession(id);
     }
-  }
-
-  /**
-   * Get the device profile name for agent-browser
-   */
-  private getDeviceProfile(device?: string): string | undefined {
-    if (!device || device === 'desktop') {
-      return undefined;
-    }
-    return DEVICE_PROFILES[device];
-  }
-
-  /**
-   * Build CLI args for session-specific options
-   */
-  buildSessionArgs(sessionId: string): string[] {
-    return ['--session-name', sessionId];
-  }
-
-  /**
-   * Build device-specific args
-   */
-  buildDeviceArgs(device?: string): string[] {
-    const deviceProfile = this.getDeviceProfile(device);
-    if (!deviceProfile) {
-      return [];
-    }
-    return ['--device', deviceProfile];
-  }
-
-  /**
-   * Build proxy args
-   */
-  buildProxyArgs(proxy?: string): string[] {
-    if (!proxy) {
-      return [];
-    }
-    return ['--proxy', proxy];
   }
 
   /**

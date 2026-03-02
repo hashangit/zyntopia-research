@@ -10,12 +10,15 @@ export const INSTALL_TIMEOUT_MS = 60000;
 export const CHROMIUM_INSTALL_TIMEOUT_MS = 120000;
 
 // Device emulation profiles mapping to agent-browser device names
-const DEVICE_PROFILES: Record<string, string> = {
+export const DEVICE_PROFILES: Record<string, string> = {
   desktop: '', // Default, no special device
   mobile: 'Pixel 5',
   iphone: 'iPhone 13',
   android: 'Pixel 5',
 };
+
+// Device type for reuse across the codebase
+export type DeviceType = 'desktop' | 'mobile' | 'iphone' | 'android';
 
 // Browser configuration options
 export interface BrowserConfig {

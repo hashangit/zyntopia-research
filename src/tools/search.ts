@@ -7,8 +7,7 @@ import {
   validateProxy,
 } from '../utils.js';
 import { searchWithTavily } from '../tavily.js';
-import { getSessionManager, type BrowserSession } from '../core/session-manager.js';
-import { BrowserError, SearchError, TimeoutError, toWebSearchError } from '../core/errors.js';
+import { getSessionManager } from '../core/session-manager.js';
 
 let browserReady = false;
 
@@ -215,22 +214,10 @@ export async function performEnhancedSearch(options: EnhancedSearchOptions): Pro
 
   // Get or create session
   const sessionManager = getSessionManager();
-  let sessionId = session_id;
-  let session: BrowserSession | null = null;
-
-  if (sessionId) {
-    session = await sessionManager.getSession(sessionId);
-    if (!session) {
-      // Session expired or not found, create new
-      sessionId = await sessionManager.createSession({ device, proxy });
-      session = await sessionManager.getSession(sessionId);
-    }
-  } else {
-    // Reuse or create session
-    const result = await sessionManager.reuseOrCreate({ device, proxy });
-    sessionId = result.sessionId;
-    session = result.session;
-  }
+  const { sessionId, session } = await sessionManager.getOrCreateSession(
+    session_id,
+    { device, proxy }
+  );
 
   const browserConfig: BrowserConfig = {
     sessionId,

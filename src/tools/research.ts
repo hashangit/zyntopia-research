@@ -8,10 +8,41 @@ import {
   type ResearchFinding,
   type ResearchAnalysisSummary,
   type KeyFact,
+  type ExtractResult,
   validateTimeout,
 } from '../utils.js';
 import { getSessionManager } from '../core/session-manager.js';
 import type { BrowserConfig } from '../core/browser.js';
+
+/**
+ * Process an extraction result into a research finding
+ */
+function processExtractResult(
+  result: ExtractResult,
+  focusTopics: string[],
+  relevanceThreshold: number,
+  extractFacts: boolean
+): ResearchFinding | null {
+  if (result.status !== 'success') return null;
+
+  const content = result.formats.article_markdown || result.formats.markdown || '';
+  if (!content) return null;
+
+  const relevanceResult = calculateRelevanceScore(content, focusTopics);
+  if (relevanceResult.score < relevanceThreshold) return null;
+
+  const keyFacts = extractFacts ? extractKeyFacts(content) : [];
+
+  return {
+    url: result.url,
+    title: result.title,
+    relevance_score: relevanceResult.score,
+    relevance_reasoning: relevanceResult.reasoning,
+    key_facts: keyFacts,
+    summary: generateSummary(content, keyFacts),
+    markdown: content,
+  };
+}
 
 /**
  * Perform automated research on a topic
@@ -45,20 +76,10 @@ export async function performResearch(input: ResearchInput): Promise<ResearchRes
 
   // Get or create session
   const sessionManager = getSessionManager();
-  let sessionId = session_id;
-  let session;
-
-  if (sessionId) {
-    session = await sessionManager.getSession(sessionId);
-    if (!session) {
-      sessionId = await sessionManager.createSession({ device });
-      session = await sessionManager.getSession(sessionId);
-    }
-  } else {
-    const result = await sessionManager.reuseOrCreate({ device });
-    sessionId = result.sessionId;
-    session = result.session;
-  }
+  const { sessionId, session } = await sessionManager.getOrCreateSession(
+    session_id,
+    { device }
+  );
 
   const browserConfig: BrowserConfig = {
     sessionId,
@@ -124,41 +145,10 @@ export async function performResearch(input: ResearchInput): Promise<ResearchRes
 
   // Step 4: Score relevance and extract facts
   for (const result of extractResults) {
-    if (result.status !== 'success') {
-      continue;
+    const finding = processExtractResult(result, focus_topics, relevance_threshold, extract_facts);
+    if (finding) {
+      findings.push(finding);
     }
-
-    const content = result.formats.article_markdown || result.formats.markdown || '';
-    if (!content) {
-      continue;
-    }
-
-    // Calculate relevance score
-    const relevanceResult = calculateRelevanceScore(content, focus_topics);
-
-    // Skip if below threshold
-    if (relevanceResult.score < relevance_threshold) {
-      continue;
-    }
-
-    // Extract key facts if requested
-    let keyFacts: KeyFact[] = [];
-    if (extract_facts && content) {
-      keyFacts = extractKeyFacts(content);
-    }
-
-    // Generate summary
-    const summary = generateSummary(content, keyFacts);
-
-    findings.push({
-      url: result.url,
-      title: result.title,
-      relevance_score: relevanceResult.score,
-      relevance_reasoning: relevanceResult.reasoning,
-      key_facts: keyFacts,
-      summary,
-      markdown: content,
-    });
   }
 
   // Step 5: Follow links if enabled (simplified - just extracts from linked pages)
@@ -180,30 +170,10 @@ export async function performResearch(input: ResearchInput): Promise<ResearchRes
     );
 
     for (const result of additionalResults) {
-      if (result.status !== 'success') continue;
-
-      const content = result.formats.article_markdown || result.formats.markdown || '';
-      if (!content) continue;
-
-      const relevanceResult = calculateRelevanceScore(content, focus_topics);
-      if (relevanceResult.score < relevance_threshold) continue;
-
-      let keyFacts: KeyFact[] = [];
-      if (extract_facts && content) {
-        keyFacts = extractKeyFacts(content);
+      const finding = processExtractResult(result, focus_topics, relevance_threshold, extract_facts);
+      if (finding) {
+        findings.push(finding);
       }
-
-      const summary = generateSummary(content, keyFacts);
-
-      findings.push({
-        url: result.url,
-        title: result.title,
-        relevance_score: relevanceResult.score,
-        relevance_reasoning: relevanceResult.reasoning,
-        key_facts: keyFacts,
-        summary,
-        markdown: content,
-      });
     }
   }
 
@@ -248,41 +218,43 @@ function generateSummary(content: string, facts: KeyFact[]): string {
   return contentPreview + '...';
 }
 
+// Pre-compiled regex and patterns for link extraction
+const LINK_REGEX = /\[([^\]]+)\]\(([^)]+)\)/g;
+const SKIP_URL_PATTERNS = [
+  'twitter.com',
+  'x.com',
+  'facebook.com',
+  'linkedin.com',
+  'instagram.com',
+  'youtube.com',
+  '.pdf',
+  '.zip',
+  '.png',
+  '.jpg',
+  '.gif',
+];
+
 /**
  * Extract links from markdown content
  */
 function extractLinks(markdown: string, baseUrl: string): string[] {
   const links: string[] = [];
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  LINK_REGEX.lastIndex = 0; // Reset regex state
 
-  let match = linkRegex.exec(markdown);
+  let match = LINK_REGEX.exec(markdown);
   while (match !== null) {
     const url = match[2];
 
     // Only include http/https links
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      // Skip common non-content URLs
-      const skipPatterns = [
-        'twitter.com',
-        'x.com',
-        'facebook.com',
-        'linkedin.com',
-        'instagram.com',
-        'youtube.com',
-        '.pdf',
-        '.zip',
-        '.png',
-        '.jpg',
-        '.gif',
-      ];
-
-      const shouldSkip = skipPatterns.some(p => url.toLowerCase().includes(p));
+      const lowerUrl = url.toLowerCase();
+      const shouldSkip = SKIP_URL_PATTERNS.some(p => lowerUrl.includes(p));
       if (!shouldSkip && url !== baseUrl) {
         links.push(url);
       }
     }
 
-    match = linkRegex.exec(markdown);
+    match = LINK_REGEX.exec(markdown);
   }
 
   // Dedupe
@@ -293,23 +265,25 @@ function extractLinks(markdown: string, baseUrl: string): string[] {
  * Extract top topics from findings
  */
 function extractTopTopics(findings: ResearchFinding[], focusTopics: string[]): string[] {
+  // Pre-lowercase topics and compile regexes once
+  const lowerTopics = focusTopics.map(t => t.toLowerCase());
+  const topicRegexes = lowerTopics.map(t => new RegExp(t, 'g'));
+
   const topicCounts: Map<string, number> = new Map();
 
   // Initialize with focus topics
-  for (const topic of focusTopics) {
-    topicCounts.set(topic.toLowerCase(), 0);
+  for (const topic of lowerTopics) {
+    topicCounts.set(topic, 0);
   }
 
   // Count occurrences in findings
   for (const finding of findings) {
     const content = finding.markdown.toLowerCase();
 
-    for (const topic of focusTopics) {
-      const lowerTopic = topic.toLowerCase();
-      const regex = new RegExp(lowerTopic, 'g');
-      const matches = content.match(regex);
+    for (let i = 0; i < lowerTopics.length; i++) {
+      const matches = content.match(topicRegexes[i]);
       const count = matches ? matches.length : 0;
-      topicCounts.set(lowerTopic, (topicCounts.get(lowerTopic) || 0) + count);
+      topicCounts.set(lowerTopics[i], (topicCounts.get(lowerTopics[i]) || 0) + count);
     }
   }
 

@@ -38,20 +38,7 @@ export async function performExtract(input: ExtractInput): Promise<ExtractRespon
 
   // Get or create session
   const sessionManager = getSessionManager();
-  let sessionId = session_id;
-  let session;
-
-  if (sessionId) {
-    session = await sessionManager.getSession(sessionId);
-    if (!session) {
-      sessionId = await sessionManager.createSession({});
-      session = await sessionManager.getSession(sessionId);
-    }
-  } else {
-    const result = await sessionManager.reuseOrCreate({});
-    sessionId = result.sessionId;
-    session = result.session;
-  }
+  const { sessionId, session } = await sessionManager.getOrCreateSession(session_id);
 
   const browserConfig: BrowserConfig = {
     sessionId,

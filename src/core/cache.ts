@@ -84,6 +84,8 @@ export class Cache<T> {
    * Remove expired entries
    */
   private cleanup(): void {
+    if (this.cache.size === 0) return; // Early exit if empty
+
     const now = Date.now();
     for (const [key, entry] of this.cache) {
       if (now > entry.expiresAt) {
