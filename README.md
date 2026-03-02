@@ -1,4 +1,4 @@
-# Web Search MCP Server
+# Zyntopia Research MCP Server
 
 A Model Context Protocol (MCP) server that enables reliable web searching, automatic fallback, multi-format content extraction, and automated research workflows.
 
@@ -127,10 +127,10 @@ For Claude Code (`~/.claude.json`):
 ```json
 {
   "mcpServers": {
-    "web-search": {
+    "zyn": {
       "type": "stdio",
       "command": "node",
-      "args": ["/path/to/web-search/build/index.js"],
+      "args": ["/path/to/zyntopia-research/build/index.js"],
       "env": {
         "TAVILY_API_KEY": "your-tavily-api-key-here"
       }

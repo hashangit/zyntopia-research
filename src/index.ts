@@ -34,7 +34,7 @@ class WebSearchServer {
   constructor() {
     this.server = new Server(
       {
-        name: 'web-search',
+        name: 'zyn',
         version: '0.3.0',
       },
       {
@@ -439,7 +439,7 @@ class WebSearchServer {
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('Web Search MCP server running on stdio');
+    console.error('Zyntopia Research MCP server running on stdio');
   }
 }
 

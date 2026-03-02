@@ -1,11 +1,11 @@
 {
-  "name": "web-search",
+  "name": "zyntopia-research",
   "version": "0.3.0",
-  "description": "Enhanced Web Search MCP Server with content extraction and automated research",
+  "description": "Zyntopia Research MCP Server - web search, content extraction, and automated research",
   "private": true,
   "type": "module",
   "bin": {
-    "web-search": "./build/index.js"
+    "zyn": "./build/index.js"
   },
   "files": [
     "build"
